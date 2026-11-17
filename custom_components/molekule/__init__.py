@@ -8,12 +8,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import CONF_MODEL
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from .const import DOMAIN, MANUFACTURER, CONF_EMAIL, CONF_PASSWORD, CONF_REFRESH_RATE, CONF_REFRESH_RATE_DEFAULT
 from .api import MolekuleApi
 from .capabilities import capabilities_for_device
 
 PLATFORMS: list[str] = ["fan", "sensor"]
+# A poll that outlives this fails, so entities go unavailable instead of holding stale state.
+POLL_TIMEOUT_SECONDS = 120
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -21,18 +24,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Molekule from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    api = MolekuleApi(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
-    
+    api = MolekuleApi(
+        entry.data[CONF_EMAIL],
+        entry.data[CONF_PASSWORD],
+        session=async_get_clientsession(hass),
+        run_blocking=hass.async_add_executor_job,
+    )
+
     try:
         await api.authenticate()
     except Exception as err:
-        await api.close()
         raise ConfigEntryNotReady from err
 
     logged_unknown: set[str] = set()
 
     async def async_update_data():
         """Fetch data from API endpoint."""
+        try:
+            async with asyncio.timeout(POLL_TIMEOUT_SECONDS):
+                return await _fetch()
+        except TimeoutError as err:
+            raise UpdateFailed(f"Poll timed out after {POLL_TIMEOUT_SECONDS}s") from err
+
+    async def _fetch():
         try:
             devices_data = await api.get_devices()
             if devices_data is None:
@@ -122,9 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data = hass.data[DOMAIN].pop(entry.entry_id)
-        api = data["api"]
-        await api.close()
+        hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
 

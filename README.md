@@ -4,7 +4,7 @@
 
 Home Assistant Molekule Integration
 
-Version: 0.2.0
+Version: 0.3.0
 
 ### Description
 
@@ -49,7 +49,7 @@ There is configuration for:
 
 This integration requires [HACS](https://hacs.xyz/).
 
-Install from this fork by adding `sven-7/home-assistant-molekule` [as a custom repository in HACS](https://hacs.xyz/docs/faq/custom_repositories/), then search for **Molekule** and install.
+Install from this fork by adding `allevaton/home-assistant-molekule` [as a custom repository in HACS](https://hacs.xyz/docs/faq/custom_repositories/), then search for **Molekule** and install.
 
 The upstream repository is `cowboyrushforth/home-assistant-molekule`; use this fork for Mini Plus and original Air support.
 

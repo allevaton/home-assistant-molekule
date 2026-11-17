@@ -5,6 +5,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_REFRESH_RATE, CONF_REFRESH_RATE_DEFAULT, CONF_SILENT_AUTO
 from .api import MolekuleApi
 
@@ -41,7 +42,12 @@ class MolekuleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             _LOGGER.debug("Attempting to authenticate with Molekule API")
-            api = MolekuleApi(user_input[CONF_EMAIL], user_input[CONF_PASSWORD])
+            api = MolekuleApi(
+                user_input[CONF_EMAIL],
+                user_input[CONF_PASSWORD],
+                session=async_get_clientsession(self.hass),
+                run_blocking=self.hass.async_add_executor_job,
+            )
             
             try:
                 await api.authenticate()
@@ -60,8 +66,6 @@ class MolekuleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception as dev_err:
                 _LOGGER.error("Failed to get devices: %s", str(dev_err), exc_info=True)
                 raise ApiError("Failed to get device list") from dev_err
-            finally:
-                await api.close()
 
             # Check if this email is already configured
             await self.async_set_unique_id(user_input[CONF_EMAIL])
